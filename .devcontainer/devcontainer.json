@@ -3,7 +3,7 @@
 {
 	"name": "go:1.24-bookworm",
 	"runArgs": [
-		"--name=templates-go",
+		"--name=markers",
 		"--network=host"
 	],
 	"dockerFile": "Dockerfile",
