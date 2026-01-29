@@ -1,12 +1,38 @@
 package markers
 
-func AddMarkerToMongodb(ctxTracer context.Context, user modelsOld.User, marker models.Marker) (models.Marker, error) {
+import (
+	"context"
+	"errors"
+	"fmt"
+	"time"
 
-	tracer, _ := utils.NewTracer()
+	"github.com/uug-ai/models/pkg/models"
+	"github.com/uug-ai/trace/pkg/opentelemetry"
+
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
+)
+
+var (
+	MARKERS_COLLECTION                    = "markers"
+	MARKER_OPTIONS_COLLECTION             = "marker_options"
+	MARKER_OPTION_RANGES_COLLECTION       = "marker_option_ranges"
+	MARKER_TAG_OPTIONS_COLLECTION         = "marker_tag_options"
+	MARKER_TAG_OPTION_RANGES_COLLECTION   = "marker_tag_option_ranges"
+	MARKER_EVENT_OPTIONS_COLLECTION       = "marker_event_options"
+	MARKER_EVENT_OPTION_RANGES_COLLECTION = "marker_event_option_ranges"
+	MARKER_CATEGORY_OPTIONS_COLLECTION    = "marker_category_options"
+
+	DatabaseName = "Kerberos"
+	TIMEOUT      = 10 * time.Second
+)
+
+func AddMarkerToMongodb(ctxTracer context.Context, tracer *opentelemetry.Tracer, client *mongo.Client, marker models.Marker) (models.Marker, error) {
+
 	ctxAddMarkerToMongodb, span := tracer.CreateSpan(ctxTracer, map[string]string{})
 	defer span.End()
 
-	client := New().Client
 	ctx, cancel := context.WithTimeout(ctxAddMarkerToMongodb, TIMEOUT)
 	defer cancel()
 
