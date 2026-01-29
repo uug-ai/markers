@@ -75,9 +75,9 @@ func AddMarkerToMongodb(ctxTracer context.Context, tracer *opentelemetry.Tracer,
 	var categoryOptUpserts []mongo.WriteModel
 
 	// Slices for range documents
-	var markerRangeDocs []interface{}
-	var tagRangeDocs []interface{}
-	var eventRangeDocs []interface{}
+	var markerRangeDocs []any
+	var tagRangeDocs []any
+	var eventRangeDocs []any
 
 	now := time.Now().Unix()
 
