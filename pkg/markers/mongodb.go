@@ -23,12 +23,13 @@ var (
 	MARKER_EVENT_OPTIONS_COLLECTION       = "marker_event_options"
 	MARKER_EVENT_OPTION_RANGES_COLLECTION = "marker_event_option_ranges"
 	MARKER_CATEGORY_OPTIONS_COLLECTION    = "marker_category_options"
+	MEDIA_COLLECTION                      = "media"
 
 	DatabaseName = "Kerberos"
 	TIMEOUT      = 10 * time.Second
 )
 
-func AddMarkerToMongodb(ctxTracer context.Context, tracer *opentelemetry.Tracer, client *mongo.Client, marker models.Marker) (models.Marker, error) {
+func AddMarkerToMongodb(ctxTracer context.Context, tracer *opentelemetry.Tracer, client *mongo.Client, marker models.Marker, mediaIds ...string) (models.Marker, error) {
 
 	ctxAddMarkerToMongodb, span := tracer.CreateSpan(ctxTracer, map[string]string{})
 	defer span.End()
@@ -271,6 +272,64 @@ func AddMarkerToMongodb(ctxTracer context.Context, tracer *opentelemetry.Tracer,
 		categoryOptCol := db.Collection(MARKER_CATEGORY_OPTIONS_COLLECTION)
 		if _, err := categoryOptCol.BulkWrite(ctx, categoryOptUpserts); err != nil {
 			return marker, fmt.Errorf("failed to upsert category options: %w", err)
+		}
+	}
+
+	// If mediaIds are provided, update the media documents with marker names, tag names, and event names
+	for _, mediaId := range mediaIds {
+		if mediaId == "" {
+			continue
+		}
+
+		mediaObjectId, err := primitive.ObjectIDFromHex(mediaId)
+		if err != nil {
+			return marker, fmt.Errorf("invalid mediaId format: %w", err)
+		}
+
+		// Collect unique marker names, tag names, and event names
+		var markerNames []string
+		if marker.Name != "" {
+			markerNames = append(markerNames, marker.Name)
+		}
+
+		var tagNames []string
+		for _, tag := range marker.Tags {
+			if tag.Name != "" {
+				tagNames = append(tagNames, tag.Name)
+			}
+		}
+
+		var eventNames []string
+		for _, event := range marker.Events {
+			if event.Name != "" {
+				eventNames = append(eventNames, event.Name)
+			}
+		}
+
+		// Build update document using $addToSet with $each to ensure uniqueness
+		updateDoc := bson.M{}
+		if len(markerNames) > 0 {
+			updateDoc["markerNames"] = bson.M{"$each": markerNames}
+		}
+		if len(tagNames) > 0 {
+			updateDoc["tagNames"] = bson.M{"$each": tagNames}
+		}
+		if len(eventNames) > 0 {
+			updateDoc["eventNames"] = bson.M{"$each": eventNames}
+		}
+
+		if len(updateDoc) > 0 {
+			mediaCol := db.Collection(MEDIA_COLLECTION)
+			filter := bson.M{
+				"_id":            mediaObjectId,
+				"startTimestamp": bson.M{"$lte": marker.StartTimestamp},
+				"endTimestamp":   bson.M{"$gte": marker.StartTimestamp},
+			}
+			update := bson.M{"$addToSet": updateDoc}
+			_, err := mediaCol.UpdateOne(ctx, filter, update)
+			if err != nil {
+				return marker, fmt.Errorf("failed to update media with marker data: %w", err)
+			}
 		}
 	}
 

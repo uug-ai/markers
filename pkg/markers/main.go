@@ -17,7 +17,7 @@ func New() *Marker {
 	return &Marker{}
 }
 
-func (m *Marker) Create(ctxTracer context.Context, tracer *opentelemetry.Tracer, client *mongo.Client, marker models.Marker) (models.Marker, error) {
+func (m *Marker) Create(ctxTracer context.Context, tracer *opentelemetry.Tracer, client *mongo.Client, marker models.Marker, mediaIds ...string) (models.Marker, error) {
 
 	// We require a marker name to be set, as this is used to identify the marker.
 	if marker.Name == "" {
@@ -28,7 +28,7 @@ func (m *Marker) Create(ctxTracer context.Context, tracer *opentelemetry.Tracer,
 	marker.Duration = marker.EndTimestamp - marker.StartTimestamp
 
 	// Add the marker to the database
-	insertedMarker, err := AddMarkerToMongodb(ctxTracer, tracer, client, marker)
+	insertedMarker, err := AddMarkerToMongodb(ctxTracer, tracer, client, marker, mediaIds...)
 	if err != nil {
 		return models.Marker{}, err
 	}
