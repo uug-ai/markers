@@ -3,7 +3,7 @@ module github.com/uug-ai/markers
 go 1.24.10
 
 require (
-	github.com/uug-ai/models v1.4.1
+	github.com/uug-ai/models v1.4.19
 	github.com/uug-ai/trace v1.1.0
 	go.mongodb.org/mongo-driver v1.17.4
 )
