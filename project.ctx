@@ -1,0 +1,193 @@
+# Markers Project - Full Context
+
+## Overview
+
+The **markers** project is a Go library/microservice developed by UUG.AI for managing video markers 
+in a MongoDB database. It is part of the Kerberos ecosystem, a video surveillance and analytics platform.
+
+Markers are annotations or labels applied to video media segments, containing metadata such as names, 
+tags, events, categories, and timestamps. This library provides the core functionality to create and 
+persist markers along with their associated metadata.
+
+## Project Information
+
+- **Module**: github.com/uug-ai/markers
+- **Go Version**: 1.24.10
+- **Organization**: UUG.AI
+- **Database**: MongoDB (Kerberos database)
+
+## Key Dependencies
+
+- `github.com/uug-ai/models` (v1.4.19) - Shared data models including the `Marker` struct
+- `github.com/uug-ai/trace` (v1.1.0) - OpenTelemetry tracing utilities
+- `go.mongodb.org/mongo-driver` (v1.17.4) - Official MongoDB Go driver
+
+## Architecture
+
+### Package Structure
+
+```
+markers/
+├── main.go                    # Simple entry point (Hello World placeholder)
+├── Dockerfile                 # Multi-stage Docker build for production deployment
+├── go.mod                     # Go module definition with dependencies
+└── pkg/
+    └── markers/
+        ├── main.go            # Core Marker struct and Create() method
+        └── mongodb.go         # MongoDB persistence layer
+```
+
+### Core Components
+
+#### 1. Marker Struct (`pkg/markers/main.go`)
+
+The main entry point for creating markers:
+
+- `New()` - Constructor that returns a new Marker instance
+- `Create()` - Creates a marker with validation and persists it to MongoDB
+  - Parameters: context, tracer, MongoDB client, marker model, mediaIds (variadic ...string, optional)
+  - Validates that marker name is set (required)
+  - Calculates duration from start/end timestamps
+  - Calls MongoDB persistence layer
+
+#### 2. MongoDB Layer (`pkg/markers/mongodb.go`)
+
+Handles all database operations with optimized bulk writes:
+
+**Collections Used:**
+- `markers` - Primary marker storage
+- `marker_options` - Unique marker names per organization (for UI dropdowns)
+- `marker_option_ranges` - Time ranges for each marker name
+- `marker_tag_options` - Unique tag names per organization
+- `marker_tag_option_ranges` - Time ranges for each tag
+- `marker_event_options` - Unique event names per organization
+- `marker_event_option_ranges` - Time ranges for each event
+- `marker_category_options` - Unique category names per organization
+- `media` - Media documents (updated with marker/tag/event names)
+
+**Key Function: `AddMarkerToMongodb()`**
+
+This function performs the following operations:
+
+1. **Insert Main Marker** - Creates a new marker document with a generated ObjectID
+
+2. **Upsert Marker Options** - For the marker name:
+   - Creates/updates entry in `marker_options` collection
+   - Links associated categories to the marker name
+   - Inserts time range data to `marker_option_ranges`
+
+3. **Upsert Tag Options** - For each tag in the marker:
+   - Creates/updates entry in `marker_tag_options`
+   - Inserts time range data to `marker_tag_option_ranges`
+
+4. **Upsert Event Options** - For each event in the marker:
+   - Creates/updates entry in `marker_event_options`
+   - Inserts time range data to `marker_event_option_ranges`
+
+5. **Upsert Category Options** - For each category:
+   - Creates/updates entry in `marker_category_options`
+
+6. **Update Media Documents** - If mediaIds are provided:
+   - Loops over each mediaId and updates the corresponding media document
+   - Adds marker names, tag names, and event names to each media
+   - Uses $addToSet to ensure uniqueness
+   - Validates that marker timestamp falls within media time range
+
+## Data Model
+
+The `Marker` model (from `github.com/uug-ai/models`) includes:
+
+- `Id` - MongoDB ObjectID
+- `Name` - Marker name (required)
+- `StartTimestamp` - Unix timestamp of marker start
+- `EndTimestamp` - Unix timestamp of marker end  
+- `Duration` - Calculated field (end - start)
+- `OrganisationId` - Organization identifier for multi-tenancy
+- `DeviceId` - Associated device/camera identifier
+- `GroupId` - Group identifier
+- `Tags` - Array of tag objects with names
+- `Events` - Array of event objects with names and timestamps
+- `Categories` - Array of category objects with names
+
+## Observability
+
+The project integrates OpenTelemetry tracing:
+- Each database operation creates a span for visibility
+- Uses the `github.com/uug-ai/trace` package for tracer management
+- Context propagation for distributed tracing
+
+## Deployment
+
+The Dockerfile provides a multi-stage build:
+
+1. **Builder Stage** - Uses Go 1.24 dev container image
+   - Configures GitHub authentication for private dependencies
+   - Downloads dependencies and builds static binary
+   - Uses flags: `-tags timetzdata,netgo --ldflags '-s -w -extldflags "-static -latomic"'`
+
+2. **Runtime Stage** - Alpine-based minimal image
+   - Creates non-root user for security
+   - Installs ca-certificates and required libraries
+   - Sets network binding capabilities
+   - Runs as non-root user
+
+## Configuration
+
+The database is configured with:
+- **DatabaseName**: "Kerberos"
+- **Timeout**: 10 seconds for MongoDB operations
+
+Collections are defined as package-level variables for consistency.
+
+## Usage Pattern
+
+```go
+import (
+    "github.com/uug-ai/markers/pkg/markers"
+    "github.com/uug-ai/models/pkg/models"
+)
+
+// Create marker instance
+m := markers.New()
+
+// Create a marker
+marker := models.Marker{
+    Name:           "Person Detected",
+    StartTimestamp: 1708790400,
+    EndTimestamp:   1708790410,
+    OrganisationId: "org-123",
+    DeviceId:       "camera-001",
+    Tags:           []models.Tag{{Name: "security"}},
+    Events:         []models.Event{{Name: "motion", StartTimestamp: 1708790400}},
+    Categories:     []models.Category{{Name: "surveillance"}},
+}
+
+// Persist to MongoDB (mediaIds are optional, can pass zero, one, or multiple)
+result, err := m.Create(ctx, tracer, mongoClient, marker)
+
+// Or with a single mediaId
+result, err := m.Create(ctx, tracer, mongoClient, marker, "media-id-here")
+
+// Or with multiple mediaIds
+result, err := m.Create(ctx, tracer, mongoClient, marker, "media-1", "media-2", "media-3")
+```
+
+## Performance Optimizations
+
+- **Bulk Write Operations**: Uses MongoDB BulkWrite for upserting multiple option documents
+- **Sets for Deduplication**: Uses Go maps as sets to avoid duplicate operations
+- **Single Transaction**: All related inserts happen in a coordinated manner
+- **$addToSet Operations**: Ensures uniqueness when updating arrays in media documents
+
+## Multi-tenancy
+
+The project supports multi-tenant architecture:
+- All marker options are scoped by `organisationId`
+- Queries filter by organization to ensure data isolation
+- Categories can be shared within an organization
+
+## Related Projects
+
+- **github.com/uug-ai/models** - Shared data models
+- **github.com/uug-ai/trace** - Tracing utilities
+- **Kerberos** - Video surveillance platform (parent system)

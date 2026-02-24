@@ -29,7 +29,7 @@ var (
 	TIMEOUT      = 10 * time.Second
 )
 
-func AddMarkerToMongodb(ctxTracer context.Context, tracer *opentelemetry.Tracer, client *mongo.Client, marker models.Marker, mediaId string) (models.Marker, error) {
+func AddMarkerToMongodb(ctxTracer context.Context, tracer *opentelemetry.Tracer, client *mongo.Client, marker models.Marker, mediaIds ...string) (models.Marker, error) {
 
 	ctxAddMarkerToMongodb, span := tracer.CreateSpan(ctxTracer, map[string]string{})
 	defer span.End()
@@ -275,8 +275,12 @@ func AddMarkerToMongodb(ctxTracer context.Context, tracer *opentelemetry.Tracer,
 		}
 	}
 
-	// If mediaId is set, update the media document with marker names, tag names, and event names
-	if mediaId != "" {
+	// If mediaIds are provided, update the media documents with marker names, tag names, and event names
+	for _, mediaId := range mediaIds {
+		if mediaId == "" {
+			continue
+		}
+
 		mediaObjectId, err := primitive.ObjectIDFromHex(mediaId)
 		if err != nil {
 			return marker, fmt.Errorf("invalid mediaId format: %w", err)
