@@ -321,14 +321,56 @@ func AddMarkerToMongodb(ctxTracer context.Context, tracer *opentelemetry.Tracer,
 		if len(updateDoc) > 0 {
 			mediaCol := db.Collection(MEDIA_COLLECTION)
 			filter := bson.M{
-				"_id":            mediaObjectId,
-				"startTimestamp": bson.M{"$lte": marker.StartTimestamp},
-				"endTimestamp":   bson.M{"$gte": marker.StartTimestamp},
+				"_id": mediaObjectId,
 			}
 			update := bson.M{"$addToSet": updateDoc}
 			_, err := mediaCol.UpdateOne(ctx, filter, update)
 			if err != nil {
 				return marker, fmt.Errorf("failed to update media with marker data: %w", err)
+			}
+		}
+	}
+
+	// If we have no mediaIds, it can still be the case media that overlap with the marker exist. In this case we want to update those media with the marker names, tag names, and event names as well for performance reasons on the frontend.
+	if len(mediaIds) == 0 {
+		// Collect unique marker names, tag names, and event names
+		updateDoc := bson.M{}
+		if marker.Name != "" {
+			updateDoc["markerNames"] = bson.M{"$each": []string{marker.Name}}
+		}
+
+		var tagNames []string
+		for _, tag := range marker.Tags {
+			if tag.Name != "" {
+				tagNames = append(tagNames, tag.Name)
+			}
+		}
+		if len(tagNames) > 0 {
+			updateDoc["tagNames"] = bson.M{"$each": tagNames}
+		}
+
+		var eventNames []string
+		for _, event := range marker.Events {
+			if event.Name != "" {
+				eventNames = append(eventNames, event.Name)
+			}
+		}
+		if len(eventNames) > 0 {
+			updateDoc["eventNames"] = bson.M{"$each": eventNames}
+		}
+
+		if len(updateDoc) > 0 {
+			mediaCol := db.Collection(MEDIA_COLLECTION)
+			// Find media where the time ranges overlap and the deviceId matches
+			filter := bson.M{
+				"deviceId":       marker.DeviceId,
+				"startTimestamp": bson.M{"$lte": marker.EndTimestamp},
+				"endTimestamp":   bson.M{"$gte": marker.StartTimestamp},
+			}
+			update := bson.M{"$addToSet": updateDoc}
+			_, err := mediaCol.UpdateMany(ctx, filter, update)
+			if err != nil {
+				return marker, fmt.Errorf("failed to update overlapping media with marker data: %w", err)
 			}
 		}
 	}
