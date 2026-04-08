@@ -322,7 +322,7 @@ func AddMarkerToMongodb(ctxTracer context.Context, tracer *opentelemetry.Tracer,
 			mediaCol := db.Collection(MEDIA_COLLECTION)
 			filter := bson.M{
 				"_id":            mediaObjectId,
-				"startTimestamp": bson.M{"$lte": marker.StartTimestamp},
+				"startTimestamp": bson.M{"$lte": marker.EndTimestamp},
 				"endTimestamp":   bson.M{"$gte": marker.StartTimestamp},
 			}
 			update := bson.M{"$addToSet": updateDoc}
