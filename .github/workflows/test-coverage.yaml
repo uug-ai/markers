@@ -15,7 +15,7 @@ jobs:
       organization: uug-ai
       project: ${{ github.event.repository.name }}
       go_version: "1.25.8"
-      go_dir: "api"
-      go_sum_path: "api/go.sum"
+      go_dir: "."
+      go_sum_path: "go.sum"
       coverage_artifact_name: coverage-report
     secrets: inherit
