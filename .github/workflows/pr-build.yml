@@ -9,8 +9,8 @@ jobs:
     with:
       project: ${{ github.event.repository.name }}
       go_version: "1.25.8"
-      go_dir: "api"
-      go_sum_path: "api/go.sum"
+      go_dir: "."
+      go_sum_path: "go.sum"
       runner_matrix: >-
         [
           {"architecture":"amd64","runner":"ubuntu-24.04"},
