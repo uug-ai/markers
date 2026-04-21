@@ -86,7 +86,7 @@ func AddMarkerToMongodb(ctxTracer context.Context, tracer *opentelemetry.Tracer,
 	if marker.Name != "" {
 		if _, exists := nameSet[marker.Name]; !exists {
 			nameSet[marker.Name] = struct{}{}
-			var categoryNamesList []string
+			categoryNamesList := make([]string, 0)
 			for _, cat := range marker.Categories {
 				if cat.Name != "" {
 					categoryNamesList = append(categoryNamesList, cat.Name)
