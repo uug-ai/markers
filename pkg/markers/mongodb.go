@@ -306,6 +306,13 @@ func AddMarkerToMongodb(ctxTracer context.Context, tracer *opentelemetry.Tracer,
 			}
 		}
 
+		var categoryNames []string
+		for _, category := range marker.Categories {
+			if category.Name != "" {
+				categoryNames = append(categoryNames, category.Name)
+			}
+		}
+
 		// Build update document using $addToSet with $each to ensure uniqueness
 		updateDoc := bson.M{}
 		if len(markerNames) > 0 {
@@ -316,6 +323,9 @@ func AddMarkerToMongodb(ctxTracer context.Context, tracer *opentelemetry.Tracer,
 		}
 		if len(eventNames) > 0 {
 			updateDoc["eventNames"] = bson.M{"$each": eventNames}
+		}
+		if len(categoryNames) > 0 {
+			updateDoc["categoryNames"] = bson.M{"$each": categoryNames}
 		}
 
 		if len(updateDoc) > 0 {
@@ -359,6 +369,16 @@ func AddMarkerToMongodb(ctxTracer context.Context, tracer *opentelemetry.Tracer,
 		}
 		if len(eventNames) > 0 {
 			updateDoc["eventNames"] = bson.M{"$each": eventNames}
+		}
+
+		var categoryNames []string
+		for _, category := range marker.Categories {
+			if category.Name != "" {
+				categoryNames = append(categoryNames, category.Name)
+			}
+		}
+		if len(categoryNames) > 0 {
+			updateDoc["categoryNames"] = bson.M{"$each": categoryNames}
 		}
 
 		if len(updateDoc) > 0 {
