@@ -328,14 +328,28 @@ func AddMarkerToMongodb(ctxTracer context.Context, tracer *opentelemetry.Tracer,
 			updateDoc["categoryNames"] = bson.M{"$each": categoryNames}
 		}
 
+		// $addToSet keeps the flat name arrays deduped for filtering; $push appends
+		// a bounded per-occurrence markerSummary entry for display.
+		update := bson.M{}
 		if len(updateDoc) > 0 {
+			update["$addToSet"] = updateDoc
+		}
+		if summary, ok := markerSummaryEntry(marker); ok {
+			update["$push"] = bson.M{
+				"markerSummary": bson.M{
+					"$each":  []bson.M{summary},
+					"$slice": -markerSummaryMaxEntries,
+				},
+			}
+		}
+
+		if len(update) > 0 {
 			mediaCol := db.Collection(MEDIA_COLLECTION)
 			filter := bson.M{
 				"_id":            mediaObjectId,
 				"startTimestamp": bson.M{"$lte": marker.EndTimestamp},
 				"endTimestamp":   bson.M{"$gte": marker.StartTimestamp},
 			}
-			update := bson.M{"$addToSet": updateDoc}
 			_, err := mediaCol.UpdateOne(ctx, filter, update)
 			if err != nil {
 				return marker, fmt.Errorf("failed to update media with marker data: %w", err)
@@ -381,7 +395,22 @@ func AddMarkerToMongodb(ctxTracer context.Context, tracer *opentelemetry.Tracer,
 			updateDoc["categoryNames"] = bson.M{"$each": categoryNames}
 		}
 
+		// $addToSet keeps the flat name arrays deduped for filtering; $push appends
+		// a bounded per-occurrence markerSummary entry for display.
+		update := bson.M{}
 		if len(updateDoc) > 0 {
+			update["$addToSet"] = updateDoc
+		}
+		if summary, ok := markerSummaryEntry(marker); ok {
+			update["$push"] = bson.M{
+				"markerSummary": bson.M{
+					"$each":  []bson.M{summary},
+					"$slice": -markerSummaryMaxEntries,
+				},
+			}
+		}
+
+		if len(update) > 0 {
 			mediaCol := db.Collection(MEDIA_COLLECTION)
 			// Find media where the time ranges overlap and the deviceId matches
 			filter := bson.M{
@@ -389,7 +418,6 @@ func AddMarkerToMongodb(ctxTracer context.Context, tracer *opentelemetry.Tracer,
 				"startTimestamp": bson.M{"$lte": marker.EndTimestamp},
 				"endTimestamp":   bson.M{"$gte": marker.StartTimestamp},
 			}
-			update := bson.M{"$addToSet": updateDoc}
 			_, err := mediaCol.UpdateMany(ctx, filter, update)
 			if err != nil {
 				return marker, fmt.Errorf("failed to update overlapping media with marker data: %w", err)
@@ -398,4 +426,62 @@ func AddMarkerToMongodb(ctxTracer context.Context, tracer *opentelemetry.Tracer,
 	}
 
 	return marker, nil
+}
+
+// markerSummaryMaxEntries caps the per-media markerSummary array so append-only
+// $push growth stays bounded on busy devices (the $slice keeps the most recent
+// entries).
+const markerSummaryMaxEntries = 200
+
+// markerSummaryEntry builds the per-occurrence markerSummary document for a
+// marker, preserving the correlation between the marker's name, its
+// category/event/tag names and its time range. The second return is false when
+// the marker carries nothing worth recording.
+func markerSummaryEntry(marker models.Marker) (bson.M, bool) {
+	entry := bson.M{}
+	if marker.Name != "" {
+		entry["name"] = marker.Name
+	}
+
+	var categoryNames []string
+	for _, category := range marker.Categories {
+		if category.Name != "" {
+			categoryNames = append(categoryNames, category.Name)
+		}
+	}
+	if len(categoryNames) > 0 {
+		entry["categoryNames"] = categoryNames
+	}
+
+	var eventNames []string
+	for _, event := range marker.Events {
+		if event.Name != "" {
+			eventNames = append(eventNames, event.Name)
+		}
+	}
+	if len(eventNames) > 0 {
+		entry["eventNames"] = eventNames
+	}
+
+	var tagNames []string
+	for _, tag := range marker.Tags {
+		if tag.Name != "" {
+			tagNames = append(tagNames, tag.Name)
+		}
+	}
+	if len(tagNames) > 0 {
+		entry["tagNames"] = tagNames
+	}
+
+	if marker.StartTimestamp != 0 {
+		entry["startTimestamp"] = marker.StartTimestamp
+	}
+	if marker.EndTimestamp != 0 {
+		entry["endTimestamp"] = marker.EndTimestamp
+	}
+
+	if len(entry) == 0 {
+		return nil, false
+	}
+	return entry, true
 }
