@@ -1,5 +1,23 @@
 # Markers
 
+> [!CAUTION]
+> **This module is deprecated and unmaintained. Do not add new consumers.**
+>
+> Use [`github.com/uug-ai/ingest/pkg/markers`](https://github.com/uug-ai/ingest)
+> instead — same `New` / `Create` / `AddMarkerToMongodb` API, tenant-scoped.
+>
+> This is not only a maintenance notice. The media-tagging writes here bound
+> only on a device label and a time window, with **no organisation clause at
+> all** — so a device key reused across organisations tags media belonging to
+> another tenant, and the overlap path does it with an `UpdateMany`. The option
+> and range collections *are* organisation-scoped, which is what made the gap
+> easy to miss. There is also no project axis: the `models` pin (v1.4.26)
+> predates `Marker.ProjectId`, so markers written here are invisible to any
+> project-scoped read.
+>
+> Nothing on the platform imports this module any more; `cli` was the last
+> consumer and now writes through `ingest`.
+
 [![Go Version](https://img.shields.io/badge/go-1.24+-blue.svg)](https://go.dev/)
 [![License](https://img.shields.io/github/license/uug-ai/markers.svg)](LICENSE)
 [![GoDoc](https://godoc.org/github.com/uug-ai/markers?status.svg)](https://godoc.org/github.com/uug-ai/markers)
@@ -22,6 +40,11 @@ A markers library for the Kerberos video surveillance platform that provides a u
 - **Production Ready**: Optimized for high-performance video annotation applications
 
 ## Installation
+
+> Deprecated — install [`ingest`](https://github.com/uug-ai/ingest) instead:
+> `go get github.com/uug-ai/ingest`, then import
+> `github.com/uug-ai/ingest/pkg/markers`. The examples below still describe this
+> module and are kept only for existing readers.
 
 ```bash
 go get github.com/uug-ai/markers

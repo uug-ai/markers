@@ -29,6 +29,11 @@ var (
 	TIMEOUT      = 10 * time.Second
 )
 
+// AddMarkerToMongodb writes the marker and its option/range documents, then
+// tags any linked or overlapping media.
+//
+// Deprecated: use github.com/uug-ai/ingest/pkg/markers.AddMarkerToMongodb. The
+// media tagging below is not organisation-scoped. See the package comment.
 func AddMarkerToMongodb(ctxTracer context.Context, tracer *opentelemetry.Tracer, client *mongo.Client, marker models.Marker, mediaIds ...string) (models.Marker, error) {
 
 	ctxAddMarkerToMongodb, span := tracer.CreateSpan(ctxTracer, map[string]string{})
